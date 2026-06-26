@@ -1,0 +1,123 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Search } from "lucide-react"
+
+type Doc = {
+  id: number
+  source: string
+  project: string
+  title: string
+  tags: string[]
+  source_updated_at: string | null
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  scrapbox: "Scrapbox",
+  chatwork: "Chatwork",
+  limitless: "Limitless",
+  plaud: "Plaud",
+  upload: "アップロード",
+}
+
+const SOURCE_COLORS: Record<string, string> = {
+  scrapbox: "bg-green-100 text-green-700",
+  chatwork: "bg-blue-100 text-blue-700",
+  limitless: "bg-purple-100 text-purple-700",
+  plaud: "bg-orange-100 text-orange-700",
+  upload: "bg-gray-100 text-gray-700",
+}
+
+export default function DocumentsPage() {
+  const [docs, setDocs] = useState<Doc[]>([])
+  const [q, setQ] = useState("")
+  const [source, setSource] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  async function search() {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: "100" })
+      if (q) params.set("q", q)
+      if (source) params.set("source", source)
+      const res = await fetch(`/api/documents?${params}`)
+      setDocs(await res.json())
+    } catch {
+      setDocs([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { search() }, [source])
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <h1 className="text-xl font-bold text-gray-900 mb-6">ドキュメント一覧</h1>
+
+      <div className="flex gap-3 mb-6">
+        <div className="flex-1 relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            className="w-full border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="タイトル・本文を検索..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && search()}
+          />
+        </div>
+        <select
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+        >
+          <option value="">全ソース</option>
+          {Object.entries(SOURCE_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <button
+          onClick={search}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          検索
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-400">読み込み中...</p>
+      ) : docs.length === 0 ? (
+        <p className="text-sm text-gray-400">ドキュメントがありません。まず「データ同期」でデータを取り込んでください。</p>
+      ) : (
+        <div className="space-y-2">
+          {docs.map((doc) => (
+            <div key={doc.id} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SOURCE_COLORS[doc.source] ?? "bg-gray-100 text-gray-700"}`}>
+                      {SOURCE_LABELS[doc.source] ?? doc.source}
+                    </span>
+                    {doc.project && <span className="text-xs text-gray-400">{doc.project}</span>}
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{doc.title || "（タイトルなし）"}</p>
+                  {doc.tags?.length > 0 && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {doc.tags.slice(0, 5).map((tag, i) => (
+                        <span key={i} className="text-xs text-gray-400">#{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {doc.source_updated_at && (
+                  <span className="text-xs text-gray-400 shrink-0">{doc.source_updated_at.slice(0, 10)}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
