@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import {
   MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList,
   ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen,
-  Lightbulb, Globe,
+  Lightbulb, Globe, Users,
 } from "lucide-react"
 
 // 入札関連パス（/finance 配下だが別グループに分離）
@@ -34,6 +34,7 @@ const nav = [
       { href: "/finance/predict", label: "入札予測", icon: Lightbulb },
     ],
   },
+  { href: "/customers", label: "顧客管理", icon: Users },
   { href: "/chat", label: "AI知識ベース", icon: MessageSquare },
   { href: "/minutes", label: "議事録", icon: NotebookPen },
   { href: "/invoices", label: "請求書", icon: FileText },
