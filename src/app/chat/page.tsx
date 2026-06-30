@@ -16,23 +16,31 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [histories, setHistories] = useState<Record<AgentId, Message[]>>({
+    knowledge: [], finance: [], bid: [], minutes: [],
+  })
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [agentId, setAgentId] = useState<AgentId>("knowledge")
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const agent = AGENTS.find((a) => a.id === agentId)!
+  const messages = histories[agentId] ?? []
+
+  function setMessages(updater: ((m: Message[]) => Message[]) | Message[]) {
+    setHistories((prev) => ({
+      ...prev,
+      [agentId]: typeof updater === "function" ? updater(prev[agentId] ?? []) : updater,
+    }))
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // エージェント切り替え時にメッセージをリセット
   function selectAgent(id: AgentId) {
     if (!AGENTS.find((a) => a.id === id)?.available) return
     setAgentId(id)
-    setMessages([])
   }
 
   async function send() {
@@ -158,7 +166,7 @@ export default function ChatPage() {
         <div className="border-t border-gray-200 bg-white px-6 py-4">
           <div className="flex gap-3 items-end">
             <textarea
-              className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 bg-white text-gray-900 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400"
               rows={2}
               placeholder={`${agent.name}に質問する...`}
               value={input}

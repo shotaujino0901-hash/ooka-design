@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
   await ingestDoc({
     source,
-    source_id: `${source}/${filename}_${Date.now()}`,
+    source_id: `${source}/${filename}`,
     project: source,
     title: filename,
     content: text,

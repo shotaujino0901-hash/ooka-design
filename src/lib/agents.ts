@@ -34,10 +34,10 @@ export const AGENTS: Agent[] = [
   {
     id: "finance",
     name: "経営数字アドバイザー",
-    description: "収支計画・粗利益・限界利益など経営数字について分析・質問できます。（Phase 2）",
+    description: "収支計画・粗利益・外注比率など経営数字について分析・質問できます。",
     icon: "📊",
     phase: 2,
-    available: false,
+    available: true,
     systemPrompt: `あなたは大岡建築設計事務所の経営数字アドバイザーです。
 案件別の収支データ（売上・外注費・粗利益・労務費・差引利益）を分析して回答します。
 
