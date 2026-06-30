@@ -14,6 +14,7 @@ const nav = [
     children: [
       { href: "/finance", label: "ダッシュボード", icon: PieChart },
       { href: "/finance/projects", label: "案件一覧", icon: ClipboardList },
+      { href: "/finance/bids", label: "入札記録", icon: FileText },
       { href: "/finance/predict", label: "入札予測", icon: Lightbulb },
       { href: "/reports", label: "レポート", icon: BarChart3 },
     ],

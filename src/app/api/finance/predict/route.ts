@@ -1,10 +1,31 @@
 import Anthropic from "@anthropic-ai/sdk"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: Request) {
   const body = await req.json()
   const { property_type, referral_source, completion_month, bid_amount, benchmarks } = body
+
+  // 入札記録から勝率・失注傾向を取得
+  const db = supabaseAdmin()
+  const { data: bidsData } = await db.from("bids").select("*").order("bid_date", { ascending: false })
+  const bids = bidsData ?? []
+  const ptBids = property_type ? bids.filter((b: any) => b.property_type === property_type) : []
+  const won = ptBids.filter((b: any) => b.result === "won")
+  const lost = ptBids.filter((b: any) => b.result === "lost")
+  const allWon = bids.filter((b: any) => b.result === "won")
+  const allLost = bids.filter((b: any) => b.result === "lost")
+  const totalDecided = allWon.length + allLost.length
+  const overallWinRate = totalDecided > 0 ? Math.round((allWon.length / totalDecided) * 100) : null
+  const ptDecided = won.length + lost.length
+  const ptWinRate = ptDecided > 0 ? Math.round((won.length / ptDecided) * 100) : null
+  const avgWonAmount = won.length > 0 ? won.reduce((s: number, b: any) => s + b.bid_amount, 0) / won.length : null
+  const avgLostAmount = lost.length > 0 ? lost.reduce((s: number, b: any) => s + b.bid_amount, 0) / lost.length : null
+  const lossReasons = lost.map((b: any) => b.loss_reason).filter(Boolean)
+  const competitorAmounts = lost.filter((b: any) => b.competitor_amount).map((b: any) => b.competitor_amount)
+  const avgCompetitorAmount = competitorAmounts.length > 0
+    ? competitorAmounts.reduce((s: number, v: number) => s + v, 0) / competitorAmounts.length : null
 
   const ptStats = property_type && benchmarks?.byPropertyType?.[property_type]
     ? benchmarks.byPropertyType[property_type]
@@ -34,9 +55,10 @@ export async function POST(req: Request) {
     n == null ? "データなし" : `${Math.round(n / 10000).toLocaleString()}${unit}`
   const fmtPct = (n: number | null | undefined) =>
     n == null ? "データなし" : `${Number(n).toFixed(1)}%`
+  const fmtBid = (n: number | null) => n == null ? "データなし" : `${Math.round(n / 10000)}万円`
 
   const prompt = `あなたは建築設計事務所の経営分析AIアシスタントです。
-大岡建築設計事務所（静岡県浜松市）の過去案件データをもとに、入札価格分析と収益予測を行ってください。
+大岡建築設計事務所（静岡県浜松市）の過去案件データと入札記録をもとに、入札価格分析と収益予測を行ってください。
 
 ## 全案件実績（${overall.count ?? 0}件）
 - 平均粗利益率: ${fmtPct(overall.avgGrossProfitRate)}
@@ -63,6 +85,16 @@ ${rangeStats ? `
 - 案件数: ${rangeStats.count}件
 - 平均粗利益率: ${fmtPct(rangeStats.avgGrossProfitRate)}
 - 粗利益率 25〜75%ile: ${fmtPct(rangeStats.p25GrossProfitRate)}〜${fmtPct(rangeStats.p75GrossProfitRate)}` : "データなし"}
+
+## 入札記録データ
+- 全入札数: ${bids.length}件（受注${allWon.length}件・失注${allLost.length}件）
+- 全体受注率: ${overallWinRate != null ? `${overallWinRate}%` : "データなし"}
+${property_type ? `- ${property_type}の入札数: ${ptBids.length}件（受注${won.length}件・失注${lost.length}件）
+- ${property_type}の受注率: ${ptWinRate != null ? `${ptWinRate}%` : "データなし"}
+- ${property_type}の受注平均金額: ${fmtBid(avgWonAmount)}
+- ${property_type}の失注平均金額: ${fmtBid(avgLostAmount)}
+- 競合平均金額（失注時）: ${fmtBid(avgCompetitorAmount)}
+- 主な失注理由: ${lossReasons.length > 0 ? [...new Set(lossReasons)].join("、") : "記録なし"}` : ""}
 
 ## 今回の入力
 - 物件種類: ${property_type ?? "未入力"}
