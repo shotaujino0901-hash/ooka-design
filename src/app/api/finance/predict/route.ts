@@ -3,68 +3,102 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+function percentile(arr: number[], p: number): number | null {
+  if (arr.length === 0) return null
+  const sorted = [...arr].sort((a, b) => a - b)
+  if (sorted.length === 1) return sorted[0]
+  const idx = (p / 100) * (sorted.length - 1)
+  const lower = Math.floor(idx)
+  const upper = Math.ceil(idx)
+  return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower)
+}
+
 export async function POST(req: Request) {
   const body = await req.json()
-  const { property_type, referral_source, completion_month, bid_amount } = body
+  const { property_type, referral_source, completion_month, bid_amount, region } = body
 
   const db = supabaseAdmin()
+
+  // 市場落札データ（メイン参照）
+  let marketQuery = db.from("market_bids").select("*")
+  if (property_type) marketQuery = marketQuery.eq("property_type", property_type)
+  if (region) marketQuery = marketQuery.ilike("region", `%${region}%`)
+  const { data: marketData } = await marketQuery
+  const marketBids = marketData ?? []
+
+  const marketAmounts = marketBids.map((b: any) => b.winning_amount).filter(Boolean) as number[]
+  const marketWithEstimated = marketBids.filter((b: any) => b.estimated_price && b.winning_amount)
+  const marketAvgWinning = marketAmounts.length > 0
+    ? marketAmounts.reduce((s, v) => s + v, 0) / marketAmounts.length : null
+  const marketP25 = percentile(marketAmounts, 25)
+  const marketP75 = percentile(marketAmounts, 75)
+  const marketAvgWinRate = marketWithEstimated.length > 0
+    ? marketWithEstimated.reduce((s: number, b: any) => s + b.winning_amount / b.estimated_price, 0) / marketWithEstimated.length * 100
+    : null
+
+  const bidderCounts: Record<string, number> = {}
+  for (const b of marketBids) {
+    if ((b as any).winning_bidder) {
+      const name = (b as any).winning_bidder as string
+      bidderCounts[name] = (bidderCounts[name] ?? 0) + 1
+    }
+  }
+  const topBidders = Object.entries(bidderCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([name, count]) => `${name}(${count}件)`)
+
+  // 最近の市場落札事例（参考）
+  const recentMarket = marketBids.slice(0, 8).map((b: any) => ({
+    date: b.bid_date,
+    project: b.project_name?.slice(0, 20),
+    bidder: b.winning_bidder,
+    amount: Math.round(b.winning_amount / 10000),
+    winRate: b.estimated_price ? `${Math.round(b.winning_amount / b.estimated_price * 100)}%` : null,
+  }))
+
+  // 自社入札記録（補足参照）
   const { data: bidsData } = await db.from("bids").select("*").order("bid_date", { ascending: false })
   const bids = bidsData ?? []
-
-  // 全体集計
   const allWon = bids.filter((b: any) => b.result === "won")
   const allLost = bids.filter((b: any) => b.result === "lost")
   const totalDecided = allWon.length + allLost.length
   const overallWinRate = totalDecided > 0 ? Math.round((allWon.length / totalDecided) * 100) : null
 
-  // 物件種類別集計
   const ptBids = property_type ? bids.filter((b: any) => b.property_type === property_type) : []
   const ptWon = ptBids.filter((b: any) => b.result === "won")
   const ptLost = ptBids.filter((b: any) => b.result === "lost")
   const ptDecided = ptWon.length + ptLost.length
   const ptWinRate = ptDecided > 0 ? Math.round((ptWon.length / ptDecided) * 100) : null
   const avgWonAmount = ptWon.length > 0 ? ptWon.reduce((s: number, b: any) => s + b.bid_amount, 0) / ptWon.length : null
-  const avgLostAmount = ptLost.length > 0 ? ptLost.reduce((s: number, b: any) => s + b.bid_amount, 0) / ptLost.length : null
-  const competitorAmounts = ptLost.filter((b: any) => b.competitor_amount).map((b: any) => b.competitor_amount as number)
-  const avgCompetitorAmount = competitorAmounts.length > 0
-    ? competitorAmounts.reduce((s: number, v: number) => s + v, 0) / competitorAmounts.length : null
   const lossReasons = [...new Set(ptLost.map((b: any) => b.loss_reason).filter(Boolean))]
 
-  // 同一物件種類の最近10件（参考）
-  const recentPtBids = ptBids.slice(0, 10).map((b: any) => ({
-    date: b.bid_date,
-    amount: Math.round(b.bid_amount / 10000),
-    competitor: b.competitor_amount ? Math.round(b.competitor_amount / 10000) : null,
-    result: b.result === "won" ? "受注" : b.result === "lost" ? "失注" : "検討中",
-    loss_reason: b.loss_reason,
-  }))
-
-  const fmtBid = (n: number | null) => n == null ? "データなし" : `${Math.round(n / 10000)}万円`
+  const fmtBid = (n: number | null | undefined) => n == null ? "データなし" : `${Math.round(n / 10000)}万円`
+  const fmtPct = (n: number | null | undefined) => n == null ? "データなし" : `${n.toFixed(1)}%`
 
   const prompt = `あなたは建築設計事務所の入札戦略アドバイザーです。
-大岡建築設計事務所（静岡県浜松市）の過去の入札記録をもとに、入札価格の戦略分析を行ってください。
+大岡建築設計事務所（静岡県浜松市）の入札を支援するため、公開落札データ（市場実態）と自社実績をもとに分析してください。
 
-## 入札記録サマリー（全${bids.length}件）
+## 市場落札データ（メイン参照）${region ? `・地域: ${region}` : ""}
+対象: ${property_type ?? "全物件種類"} / 参照件数: ${marketBids.length}件
+${marketBids.length > 0 ? `- 平均落札金額: ${fmtBid(marketAvgWinning)}
+- 落札金額レンジ（25〜75%ile）: ${fmtBid(marketP25)} 〜 ${fmtBid(marketP75)}
+- 平均落札率（落札/予定価格）: ${fmtPct(marketAvgWinRate)}
+- 主要落札者: ${topBidders.length > 0 ? topBidders.join("、") : "データなし"}
+- 最近の落札事例: ${recentMarket.map((b: any) => `${b.amount}万円(${b.winRate ?? "—"})`).join("、")}` : "市場データなし（自社実績のみで分析）"}
+
+## 自社入札実績（補足）
 - 全体受注率: ${overallWinRate != null ? `${overallWinRate}%` : "データなし"}（受注${allWon.length}件・失注${allLost.length}件）
-
-## 物件種類別実績：${property_type ?? "未指定"}
-${property_type ? `- 入札数: ${ptBids.length}件（受注${ptWon.length}件・失注${ptLost.length}件）
-- 受注率: ${ptWinRate != null ? `${ptWinRate}%` : "データなし"}
-- 受注平均金額: ${fmtBid(avgWonAmount)}
-- 失注平均金額: ${fmtBid(avgLostAmount)}
-- 競合平均金額（失注時）: ${fmtBid(avgCompetitorAmount)}
-- 主な失注理由: ${lossReasons.length > 0 ? lossReasons.join("、") : "記録なし"}` : "物件種類未指定のため全体データを参照"}
-
-## 最近の入札実績（${property_type ?? "全体"}・最大10件）
-${recentPtBids.length > 0
-  ? recentPtBids.map((b: any) => `- ${b.date}: ${b.amount}万円 → ${b.result}${b.competitor ? ` (競合:${b.competitor}万円)` : ""}${b.loss_reason ? ` [${b.loss_reason}]` : ""}`).join("\n")
-  : "該当する入札記録なし"}
+${property_type && ptBids.length > 0 ? `- ${property_type}の受注率: ${ptWinRate != null ? `${ptWinRate}%` : "データなし"}（${ptDecided}件）
+- ${property_type}の受注平均金額: ${fmtBid(avgWonAmount)}
+- 主な失注理由: ${lossReasons.length > 0 ? lossReasons.join("、") : "記録なし"}` : ""}
 
 ## 今回の入力
 - 物件種類: ${property_type ?? "未入力"}
+- 地域: ${region ?? "未指定"}
 - 紹介先: ${referral_source ?? "未入力"}
 - 完成予定: ${completion_month ?? "未入力"}
-- 入札金額（税込）: ${bid_amount ? `${Math.round(bid_amount / 10000)}万円` : "未入力"}
+- 入札金額（税込）: ${bid_amount ? fmtBid(bid_amount) : "未入力"}
 
 ## 回答形式
 以下のJSONのみ返してください（コードブロック不要、説明文不要）：

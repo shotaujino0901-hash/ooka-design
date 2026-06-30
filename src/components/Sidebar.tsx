@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList, ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen, Lightbulb } from "lucide-react"
+import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList, ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen, Lightbulb, Globe } from "lucide-react"
 
 const nav = [
   { href: "/", label: "ホーム", icon: Home },
@@ -15,6 +15,7 @@ const nav = [
       { href: "/finance", label: "ダッシュボード", icon: PieChart },
       { href: "/finance/projects", label: "案件一覧", icon: ClipboardList },
       { href: "/finance/bids", label: "入札記録", icon: FileText },
+      { href: "/finance/market-bids", label: "市場落札データ", icon: Globe },
       { href: "/finance/predict", label: "入札予測", icon: Lightbulb },
       { href: "/reports", label: "レポート", icon: BarChart3 },
     ],
@@ -28,7 +29,7 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const isFinance = pathname.startsWith("/finance") || pathname.startsWith("/reports") || pathname.startsWith("/predict")
+  const isFinance = pathname.startsWith("/finance") || pathname.startsWith("/reports") || pathname.startsWith("/predict") || pathname.startsWith("/market-bids")
   const [financeOpen, setFinanceOpen] = useState(isFinance)
 
   return (

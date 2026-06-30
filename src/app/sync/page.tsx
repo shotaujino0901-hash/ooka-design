@@ -39,6 +39,15 @@ export default function SyncPage() {
   const bidFileRef = useRef<HTMLInputElement>(null)
   const bidSaveFileRef = useRef<File | null>(null)
 
+  // 市場入札データインポート
+  const [marketImporting, setMarketImporting] = useState(false)
+  const [marketPreview, setMarketPreview] = useState<any[] | null>(null)
+  const [marketImportError, setMarketImportError] = useState<string | null>(null)
+  const [marketSaving, setMarketSaving] = useState(false)
+  const [marketSaveResult, setMarketSaveResult] = useState<string | null>(null)
+  const marketFileRef = useRef<HTMLInputElement>(null)
+  const marketSaveFileRef = useRef<File | null>(null)
+
   async function loadStats() {
     try {
       const data = await apiDocStats()
@@ -95,6 +104,41 @@ export default function SyncPage() {
       if (bidFileRef.current) bidFileRef.current.value = ""
     } else {
       setBidImportError(data.error ?? "保存に失敗しました")
+    }
+  }
+
+  async function handleMarketImport(file: File) {
+    setMarketImporting(true)
+    setMarketImportError(null)
+    setMarketPreview(null)
+    setMarketSaveResult(null)
+    marketSaveFileRef.current = file
+    const fd = new FormData()
+    fd.append("file", file)
+    fd.append("save", "false")
+    const res = await fetch("/api/market-bids/import", { method: "POST", body: fd })
+    const data = await res.json()
+    setMarketImporting(false)
+    if (!res.ok) { setMarketImportError(data.error ?? "エラーが発生しました"); return }
+    setMarketPreview(data.records ?? [])
+  }
+
+  async function handleMarketSave() {
+    const file = marketSaveFileRef.current
+    if (!file) return
+    setMarketSaving(true)
+    const fd = new FormData()
+    fd.append("file", file)
+    fd.append("save", "true")
+    const res = await fetch("/api/market-bids/import", { method: "POST", body: fd })
+    const data = await res.json()
+    setMarketSaving(false)
+    if (res.ok) {
+      setMarketPreview(null)
+      setMarketSaveResult(`${data.saved}件の落札データを保存しました`)
+      if (marketFileRef.current) marketFileRef.current.value = ""
+    } else {
+      setMarketImportError(data.error ?? "保存に失敗しました")
     }
   }
 
@@ -253,6 +297,64 @@ export default function SyncPage() {
         )}
         {bidImportError && <p className="mt-3 text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{bidImportError}</p>}
         {bidSaveResult && <p className="mt-3 text-xs text-green-600 flex items-center gap-1"><Check size={12} />{bidSaveResult}</p>}
+      </div>
+
+      {/* 市場入札データ（落札結果） */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+        <h2 className="font-semibold text-gray-900 mb-1">市場入札データ（落札結果）</h2>
+        <p className="text-xs text-gray-500 mb-4">公開された落札結果データをAIが読み取り、入札予測の参照データとして保存します</p>
+        {!marketPreview ? (
+          <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 transition-colors ${marketImporting ? "border-blue-300 bg-blue-50 cursor-wait" : "border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-blue-50"}`}>
+            {marketImporting ? (
+              <><Loader2 size={22} className="text-blue-500 mb-2 animate-spin" /><span className="text-sm text-gray-600">AIが読み取り中...</span></>
+            ) : (
+              <><Upload size={22} className="text-gray-400 mb-2" /><span className="text-sm text-gray-600">クリックしてファイルを選択</span><span className="text-xs text-gray-400 mt-1">.xlsx / .xls / .pdf</span></>
+            )}
+            <input ref={marketFileRef} type="file" accept=".xlsx,.xls,.pdf" className="hidden" disabled={marketImporting}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMarketImport(f) }} />
+          </label>
+        ) : (
+          <div>
+            <p className="text-sm text-gray-700 mb-3">
+              <span className="font-semibold text-blue-700">{marketPreview.length}件</span>の落札データを読み取りました。確認して保存してください。
+            </p>
+            <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-h-52 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium">案件名</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium">地域</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium">落札者</th>
+                    <th className="text-right px-3 py-2 text-gray-500 font-medium">落札金額</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketPreview.map((r, i) => (
+                    <tr key={i} className={i < marketPreview.length - 1 ? "border-b border-gray-50" : ""}>
+                      <td className="px-3 py-2 text-gray-800 max-w-[180px] truncate">{r.project_name}</td>
+                      <td className="px-3 py-2 text-gray-500">{r.region ?? "—"}</td>
+                      <td className="px-3 py-2 text-gray-600">{r.winning_bidder ?? "—"}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{r.winning_amount ? `${Math.round(r.winning_amount / 10000)}万` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setMarketPreview(null); if (marketFileRef.current) marketFileRef.current.value = "" }}
+                className="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                やり直す
+              </button>
+              <button onClick={handleMarketSave} disabled={marketSaving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {marketSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                {marketPreview.length}件を保存
+              </button>
+            </div>
+          </div>
+        )}
+        {marketImportError && <p className="mt-3 text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{marketImportError}</p>}
+        {marketSaveResult && <p className="mt-3 text-xs text-green-600 flex items-center gap-1"><Check size={12} />{marketSaveResult}</p>}
       </div>
 
       {/* ファイルアップロード */}
