@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList, ChevronDown, ChevronRight, Settings, FileText, BarChart3 } from "lucide-react"
+import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList, ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen } from "lucide-react"
 
 const nav = [
   { href: "/", label: "ホーム", icon: Home },
@@ -18,6 +18,7 @@ const nav = [
     ],
   },
   { href: "/chat", label: "AI知識ベース", icon: MessageSquare },
+  { href: "/minutes", label: "議事録", icon: NotebookPen },
   { href: "/invoices", label: "請求書", icon: FileText },
   { href: "/documents", label: "ドキュメント", icon: Database },
   { href: "/sync", label: "データ同期", icon: RefreshCw },
