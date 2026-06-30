@@ -7,25 +7,25 @@ import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, Clipboar
 
 const nav = [
   { href: "/", label: "ホーム", icon: Home },
-  { href: "/chat", label: "AI知識ベース", icon: MessageSquare },
   {
     href: "/finance",
-    label: "経営数字",
+    label: "経営指標",
     icon: BarChart2,
     children: [
       { href: "/finance", label: "ダッシュボード", icon: PieChart },
       { href: "/finance/projects", label: "案件一覧", icon: ClipboardList },
+      { href: "/reports", label: "レポート", icon: BarChart3 },
     ],
   },
+  { href: "/chat", label: "AI知識ベース", icon: MessageSquare },
   { href: "/invoices", label: "請求書", icon: FileText },
-  { href: "/reports", label: "レポート", icon: BarChart3 },
   { href: "/documents", label: "ドキュメント", icon: Database },
   { href: "/sync", label: "データ同期", icon: RefreshCw },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const isFinance = pathname.startsWith("/finance")
+  const isFinance = pathname.startsWith("/finance") || pathname.startsWith("/reports")
   const [financeOpen, setFinanceOpen] = useState(isFinance)
 
   return (
