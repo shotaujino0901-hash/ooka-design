@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Loader2, Pencil, Trash2, X, Check, Upload, AlertCircle } from "lucide-react"
+import { Plus, Loader2, Pencil, Trash2, X, Check } from "lucide-react"
 
 const PROPERTY_TYPES = [
   "事業系木造", "事業系非木造", "住宅木造", "住宅非木造",
@@ -29,6 +29,8 @@ type Bid = {
   notes: string | null
 }
 
+type FormResult = "won" | "lost" | "pending"
+
 const EMPTY_FORM = {
   bid_date: new Date().toISOString().split("T")[0],
   project_name: "",
@@ -37,7 +39,7 @@ const EMPTY_FORM = {
   referral_source: "",
   bid_amount: "",
   competitor_amount: "",
-  result: "pending" as const,
+  result: "pending" as FormResult,
   loss_reason: "",
   notes: "",
 }
@@ -58,10 +60,6 @@ export default function BidsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [filterResult, setFilterResult] = useState("")
-  const [importing, setImporting] = useState(false)
-  const [importPreview, setImportPreview] = useState<any[] | null>(null)
-  const [importError, setImportError] = useState("")
-  const [showImport, setShowImport] = useState(false)
 
   function load() {
     setLoading(true)
@@ -89,7 +87,7 @@ export default function BidsPage() {
       referral_source: bid.referral_source ?? "",
       bid_amount: bid.bid_amount ? String(Math.round(bid.bid_amount / 10000)) : "",
       competitor_amount: bid.competitor_amount ? String(Math.round(bid.competitor_amount / 10000)) : "",
-      result: bid.result,
+      result: bid.result as FormResult,
       loss_reason: bid.loss_reason ?? "",
       notes: bid.notes ?? "",
     })
@@ -130,38 +128,6 @@ export default function BidsPage() {
     load()
   }
 
-  async function handleImportPreview(file: File) {
-    setImporting(true)
-    setImportError("")
-    setImportPreview(null)
-    const fd = new FormData()
-    fd.append("file", file)
-    fd.append("save", "false")
-    const res = await fetch("/api/bids/import", { method: "POST", body: fd })
-    const data = await res.json()
-    setImporting(false)
-    if (!res.ok) { setImportError(data.error ?? "エラーが発生しました"); return }
-    setImportPreview(data.records ?? [])
-  }
-
-  async function handleImportSave(file: File) {
-    setImporting(true)
-    const fd = new FormData()
-    fd.append("file", file)
-    fd.append("save", "true")
-    const res = await fetch("/api/bids/import", { method: "POST", body: fd })
-    const data = await res.json()
-    setImporting(false)
-    if (res.ok) {
-      setShowImport(false)
-      setImportPreview(null)
-      load()
-      alert(`${data.saved}件の入札記録をインポートしました`)
-    } else {
-      setImportError(data.error ?? "エラーが発生しました")
-    }
-  }
-
   async function handleDelete(id: number, name: string) {
     if (!confirm(`「${name}」を削除しますか？`)) return
     await fetch(`/api/bids/${id}`, { method: "DELETE" })
@@ -191,22 +157,13 @@ export default function BidsPage() {
           <h1 className="text-xl font-bold text-gray-900">入札記録</h1>
           <p className="text-xs text-gray-500 mt-0.5">過去の入札データを蓄積して予測精度を高めます</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setShowImport(true); setImportPreview(null); setImportError("") }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <Upload size={14} />
-            Excel/PDFから取り込み
-          </button>
-          <button
-            onClick={openNew}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={14} />
-            手動追加
-          </button>
-        </div>
+        <button
+          onClick={openNew}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={14} />
+          手動追加
+        </button>
       </div>
 
       {/* 統計サマリー */}
@@ -300,99 +257,6 @@ export default function BidsPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* インポートモーダル */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-base font-bold text-gray-900">Excel / PDF から取り込み</h2>
-              <button onClick={() => setShowImport(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-            </div>
-            <div className="p-6">
-              {!importPreview ? (
-                <div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    入札記録が入ったExcel（.xlsx）またはPDF（.pdf）をアップロードしてください。<br />
-                    AIが自動で案件・金額・結果を読み取ります。
-                  </p>
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-8 cursor-pointer hover:border-blue-400 transition-colors">
-                    {importing ? (
-                      <><Loader2 size={24} className="animate-spin text-blue-400 mb-2" /><p className="text-sm text-gray-500">AIが読み取り中...</p></>
-                    ) : (
-                      <><Upload size={24} className="text-gray-300 mb-2" /><p className="text-sm text-gray-500">クリックしてファイルを選択</p><p className="text-xs text-gray-400 mt-1">.xlsx / .xls / .pdf</p></>
-                    )}
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls,.pdf"
-                      className="hidden"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportPreview(f) }}
-                    />
-                  </label>
-                  {importError && (
-                    <div className="flex items-center gap-2 mt-3 text-red-600 text-sm">
-                      <AlertCircle size={14} />{importError}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-gray-700 mb-3">
-                    <span className="font-semibold text-blue-700">{importPreview.length}件</span>の入札記録を読み取りました。内容を確認して保存してください。
-                  </p>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-4 max-h-64 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-100">
-                          <th className="text-left px-3 py-2 font-medium text-gray-500">案件名</th>
-                          <th className="text-left px-3 py-2 font-medium text-gray-500">物件種類</th>
-                          <th className="text-right px-3 py-2 font-medium text-gray-500">入札金額</th>
-                          <th className="text-center px-3 py-2 font-medium text-gray-500">結果</th>
-                          <th className="text-left px-3 py-2 font-medium text-gray-500">入札日</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {importPreview.map((r, i) => (
-                          <tr key={i} className={i < importPreview.length - 1 ? "border-b border-gray-50" : ""}>
-                            <td className="px-3 py-2 text-gray-800 max-w-[200px] truncate">{r.project_name}</td>
-                            <td className="px-3 py-2 text-gray-500">{r.property_type ?? "—"}</td>
-                            <td className="px-3 py-2 text-right text-gray-700">{r.bid_amount ? `${Math.round(r.bid_amount / 10000)}万` : "—"}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className={`px-1.5 py-0.5 rounded-full font-medium ${RESULT_COLORS[r.result as string] ?? "bg-gray-100 text-gray-500"}`}>
-                                {RESULT_LABELS[r.result as string] ?? r.result}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-gray-400">{r.bid_date ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setImportPreview(null)} className="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                      やり直す
-                    </button>
-                    <button
-                      onClick={() => {
-                        const input = document.createElement("input")
-                        input.type = "file"
-                        input.accept = ".xlsx,.xls,.pdf"
-                        input.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleImportSave(f) }
-                        input.click()
-                      }}
-                      disabled={importing}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                      {importing ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                      {importPreview.length}件を保存する
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

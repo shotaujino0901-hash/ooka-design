@@ -23,7 +23,7 @@ const nav = [
   { href: "/minutes", label: "議事録", icon: NotebookPen },
   { href: "/invoices", label: "請求書", icon: FileText },
   { href: "/documents", label: "ドキュメント", icon: Database },
-  { href: "/sync", label: "データ同期", icon: RefreshCw },
+  { href: "/sync", label: "データ取込", icon: RefreshCw },
 ]
 
 export default function Sidebar() {
