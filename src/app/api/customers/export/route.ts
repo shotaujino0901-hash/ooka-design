@@ -28,9 +28,10 @@ export async function GET() {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "顧客一覧")
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
+  const uint8 = new Uint8Array(buf)
 
   const date = new Date().toISOString().slice(0, 10)
-  return new Response(buf, {
+  return new Response(uint8, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="customers_${date}.xlsx"`,
