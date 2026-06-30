@@ -3,21 +3,35 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList, ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen, Lightbulb, Globe } from "lucide-react"
+import {
+  MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList,
+  ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen,
+  Lightbulb, Globe,
+} from "lucide-react"
+
+// 入札関連パス（/finance 配下だが別グループに分離）
+const BID_PATHS = ["/finance/bids", "/finance/market-bids", "/finance/predict"]
 
 const nav = [
   { href: "/", label: "ホーム", icon: Home },
   {
-    href: "/finance",
+    key: "finance",
     label: "経営指標",
     icon: BarChart2,
     children: [
       { href: "/finance", label: "ダッシュボード", icon: PieChart },
       { href: "/finance/projects", label: "案件一覧", icon: ClipboardList },
+      { href: "/reports", label: "レポート", icon: BarChart3 },
+    ],
+  },
+  {
+    key: "bids",
+    label: "入札",
+    icon: FileText,
+    children: [
       { href: "/finance/bids", label: "入札記録", icon: FileText },
       { href: "/finance/market-bids", label: "市場落札データ", icon: Globe },
       { href: "/finance/predict", label: "入札予測", icon: Lightbulb },
-      { href: "/reports", label: "レポート", icon: BarChart3 },
     ],
   },
   { href: "/chat", label: "AI知識ベース", icon: MessageSquare },
@@ -29,8 +43,18 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const isFinance = pathname.startsWith("/finance") || pathname.startsWith("/reports") || pathname.startsWith("/predict") || pathname.startsWith("/market-bids")
-  const [financeOpen, setFinanceOpen] = useState(isFinance)
+
+  const isBidPath = BID_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+  const isFinancePath = !isBidPath && (pathname === "/finance" || pathname.startsWith("/finance/") || pathname.startsWith("/reports"))
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    finance: isFinancePath,
+    bids: isBidPath,
+  })
+
+  function toggleGroup(key: string) {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
 
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
@@ -39,38 +63,37 @@ export default function Sidebar() {
         <h1 className="text-sm font-bold text-gray-900 leading-tight mt-0.5">社内プラットフォーム</h1>
       </div>
       <nav className="flex-1 p-3 space-y-1">
-        {nav.map(({ href, label, icon: Icon, children }) => {
-          if (children) {
-            const isOpen = financeOpen || isFinance
+        {nav.map((item) => {
+          if ("children" in item) {
+            const { key, label, icon: Icon, children } = item
+            const isActive = key === "finance" ? isFinancePath : key === "bids" ? isBidPath : false
+            const isOpen = openGroups[key] || isActive
             return (
-              <div key={href}>
+              <div key={key}>
                 <button
-                  onClick={() => setFinanceOpen((v) => !v)}
+                  onClick={() => toggleGroup(key)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    isFinance
-                      ? "text-blue-700 font-medium"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    isActive ? "text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
                   <Icon size={16} />
                   <span className="flex-1 text-left">{label}</span>
                   {isOpen
                     ? <ChevronDown size={13} className="text-gray-400" />
-                    : <ChevronRight size={13} className="text-gray-400" />
-                  }
+                    : <ChevronRight size={13} className="text-gray-400" />}
                 </button>
                 {isOpen && (
                   <div className="ml-5 mt-0.5 space-y-0.5 border-l border-gray-200 pl-3">
-                    {children.map(({ href: ch, label: cl, icon: CI }) => {
-                      const active = pathname === ch
+                    {children.map(({ href, label: cl, icon: CI }) => {
+                      const active = href === "/finance"
+                        ? pathname === "/finance"
+                        : pathname === href || pathname.startsWith(href + "/")
                       return (
                         <Link
-                          key={ch}
-                          href={ch}
+                          key={href}
+                          href={href}
                           className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors ${
-                            active
-                              ? "bg-blue-50 text-blue-700 font-medium"
-                              : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                            active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                           }`}
                         >
                           <CI size={14} />
@@ -84,15 +107,14 @@ export default function Sidebar() {
             )
           }
 
+          const { href, label, icon: Icon } = item
           const active = pathname === href
           return (
             <Link
               key={href}
               href={href}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                active
-                  ? "bg-blue-50 text-blue-700 font-medium"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               }`}
             >
               <Icon size={16} />
@@ -105,9 +127,7 @@ export default function Sidebar() {
         <Link
           href="/settings"
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-            pathname === "/settings"
-              ? "bg-blue-50 text-blue-700 font-medium"
-              : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            pathname === "/settings" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           }`}
         >
           <Settings size={15} />
