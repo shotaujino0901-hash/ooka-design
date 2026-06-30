@@ -49,6 +49,7 @@ export async function GET(req: Request) {
   const term = searchParams.get("term")
   const propertyType = searchParams.get("propertyType")
   const referralSource = searchParams.get("referralSource")
+  const completionMonth = searchParams.get("completionMonth")
   const sort = searchParams.get("sort") ?? "gross_profit_rate"
   const order = searchParams.get("order") ?? "desc"
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "500"), 1000)
@@ -59,6 +60,7 @@ export async function GET(req: Request) {
   if (term) query = query.eq("term", parseInt(term))
   if (propertyType) query = query.eq("property_type", propertyType)
   if (referralSource) query = query.eq("referral_source", referralSource)
+  if (completionMonth) query = query.ilike("completion_month", `%${completionMonth}%`)
 
   query = query.order(sort as any, { ascending: order === "asc" }).limit(limit)
 
