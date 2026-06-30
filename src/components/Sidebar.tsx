@@ -65,7 +65,7 @@ export default function Sidebar() {
       <nav className="flex-1 p-3 space-y-1">
         {nav.map((item) => {
           if ("children" in item) {
-            const { key, label, icon: Icon, children } = item
+            const { key = "", label, icon: Icon, children } = item
             const isActive = key === "finance" ? isFinancePath : key === "bids" ? isBidPath : false
             const isOpen = openGroups[key] || isActive
             return (
