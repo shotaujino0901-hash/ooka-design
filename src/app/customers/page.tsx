@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Plus, Search, X, Check, User, Building2, AlertCircle } from "lucide-react"
+import { Loader2, Plus, Search, X, Check, User, Building2, AlertCircle, Download, Upload } from "lucide-react"
 
 type Customer = {
   id: number
@@ -15,6 +15,14 @@ type Customer = {
   notes: string | null
   next_action: string | null
   next_action_date: string | null
+}
+
+type ImportRecord = {
+  name: string
+  company: string | null
+  type: string
+  phone: string | null
+  email: string | null
 }
 
 const inputCls = "w-full bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-gray-400"
@@ -33,6 +41,17 @@ export default function CustomersPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
   const [saving, setSaving] = useState(false)
+
+  // インポート
+  const importFileRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState<ImportRecord[] | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSaving, setImportSaving] = useState(false)
+  const importFileCache = useRef<File | null>(null)
+
+  // エクスポート
+  const [exporting, setExporting] = useState(false)
 
   function load() {
     setLoading(true)
@@ -66,11 +85,63 @@ export default function CustomersPage() {
     }
   }
 
-  // 今日以内・近日のアクション
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await fetch("/api/customers/export")
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `customers_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setImporting(true)
+    setImportError(null)
+    setImportPreview(null)
+    importFileCache.current = file
+    const fd = new FormData()
+    fd.append("file", file)
+    fd.append("save", "false")
+    const res = await fetch("/api/customers/import", { method: "POST", body: fd })
+    const data = await res.json()
+    setImporting(false)
+    if (!res.ok) { setImportError(data.error ?? "エラーが発生しました"); return }
+    setImportPreview(data.records ?? [])
+  }
+
+  async function handleImportSave() {
+    const file = importFileCache.current
+    if (!file) return
+    setImportSaving(true)
+    const fd = new FormData()
+    fd.append("file", file)
+    fd.append("save", "true")
+    const res = await fetch("/api/customers/import", { method: "POST", body: fd })
+    const data = await res.json()
+    setImportSaving(false)
+    if (res.ok) {
+      setImportPreview(null)
+      if (importFileRef.current) importFileRef.current.value = ""
+      load()
+    } else {
+      setImportError(data.error ?? "保存に失敗しました")
+    }
+  }
+
   const today = new Date().toISOString().split("T")[0]
   const withAction = customers.filter((c) => c.next_action_date)
   const overdue = withAction.filter((c) => c.next_action_date! < today)
-  const upcoming = withAction.filter((c) => c.next_action_date! >= today && c.next_action_date! <= new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0])
+  const upcoming = withAction.filter((c) =>
+    c.next_action_date! >= today &&
+    c.next_action_date! <= new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]
+  )
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -79,14 +150,91 @@ export default function CustomersPage() {
           <h1 className="text-xl font-bold text-gray-900">顧客管理</h1>
           <p className="text-xs text-gray-500 mt-0.5">施主・法人の情報・案件・打ち合わせを一元管理</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={14} />
-          顧客を追加
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            エクスポート
+          </button>
+          <label className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${importing ? "opacity-50 cursor-wait" : ""}`}>
+            {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            インポート
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              disabled={importing}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
+            />
+          </label>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={14} />
+            顧客を追加
+          </button>
+        </div>
       </div>
+
+      {/* インポートプレビュー */}
+      {importPreview && (
+        <div className="bg-white border border-blue-200 rounded-xl p-5 mb-5">
+          <p className="text-sm text-gray-700 mb-3">
+            <span className="font-semibold text-blue-700">{importPreview.length}件</span>を読み取りました。確認して保存してください。
+          </p>
+          <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-h-48 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">名前</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">会社名</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">種別</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">電話</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">メール</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importPreview.map((r, i) => (
+                  <tr key={i} className={i < importPreview.length - 1 ? "border-b border-gray-50" : ""}>
+                    <td className="px-3 py-2 font-medium text-gray-800">{r.name}</td>
+                    <td className="px-3 py-2 text-gray-500">{r.company ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-500">{r.type}</td>
+                    <td className="px-3 py-2 text-gray-500">{r.phone ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-500">{r.email ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setImportPreview(null); if (importFileRef.current) importFileRef.current.value = "" }}
+              className="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleImportSave}
+              disabled={importSaving}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {importSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              {importPreview.length}件を保存
+            </button>
+          </div>
+          {importError && <p className="mt-2 text-xs text-red-600">{importError}</p>}
+        </div>
+      )}
+      {importError && !importPreview && (
+        <p className="mb-4 text-xs text-red-600 flex items-center gap-1">
+          <AlertCircle size={12} />{importError}
+        </p>
+      )}
 
       {/* アクションアラート */}
       {(overdue.length > 0 || upcoming.length > 0) && (
@@ -138,7 +286,7 @@ export default function CustomersPage() {
       ) : customers.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-200 rounded-xl px-4 py-12 text-center">
           <p className="text-sm text-gray-400">顧客が登録されていません</p>
-          <p className="text-xs text-gray-400 mt-1">「顧客を追加」から登録してください</p>
+          <p className="text-xs text-gray-400 mt-1">「顧客を追加」または「インポート」で登録してください</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
