@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Loader2, Pencil, Trash2, X, Check } from "lucide-react"
+import { Loader2, X, Check, Trash2 } from "lucide-react"
 
 const PROPERTY_TYPES = [
   "事業系木造", "事業系非木造", "住宅木造", "住宅非木造",
@@ -29,21 +29,6 @@ type Bid = {
   notes: string | null
 }
 
-type FormResult = "won" | "lost" | "pending"
-
-const EMPTY_FORM = {
-  bid_date: new Date().toISOString().split("T")[0],
-  project_name: "",
-  property_type: "",
-  client_name: "",
-  referral_source: "",
-  bid_amount: "",
-  competitor_amount: "",
-  result: "pending" as FormResult,
-  loss_reason: "",
-  notes: "",
-}
-
 const fmt = (n: number | null | undefined) =>
   n == null ? "—" : `${Math.round(n / 10000).toLocaleString()}万円`
 
@@ -52,14 +37,17 @@ const fmtDate = (s: string) => {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
 }
 
+const inputCls = "w-full bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-gray-400"
+const labelCls = "block text-xs font-medium text-gray-600 mb-1"
+
 export default function BidsPage() {
   const [bids, setBids] = useState<Bid[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
   const [filterResult, setFilterResult] = useState("")
+  const [selected, setSelected] = useState<Bid | null>(null)
+  const [editing, setEditing] = useState<Bid | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   function load() {
     setLoading(true)
@@ -72,98 +60,64 @@ export default function BidsPage() {
 
   useEffect(() => { load() }, [filterResult])
 
-  function openNew() {
-    setForm(EMPTY_FORM)
-    setEditId(null)
-    setShowForm(true)
+  function openDetail(bid: Bid) {
+    setSelected(bid)
+    setEditing({ ...bid })
+    setSaved(false)
   }
 
-  function openEdit(bid: Bid) {
-    setForm({
-      bid_date: bid.bid_date,
-      project_name: bid.project_name,
-      property_type: bid.property_type ?? "",
-      client_name: bid.client_name ?? "",
-      referral_source: bid.referral_source ?? "",
-      bid_amount: bid.bid_amount ? String(Math.round(bid.bid_amount / 10000)) : "",
-      competitor_amount: bid.competitor_amount ? String(Math.round(bid.competitor_amount / 10000)) : "",
-      result: bid.result as FormResult,
-      loss_reason: bid.loss_reason ?? "",
-      notes: bid.notes ?? "",
-    })
-    setEditId(bid.id)
-    setShowForm(true)
+  function closeDetail() {
+    setSelected(null)
+    setEditing(null)
+  }
+
+  function setField<K extends keyof Bid>(k: K, v: Bid[K]) {
+    setEditing((prev) => prev ? { ...prev, [k]: v } : prev)
+    setSaved(false)
   }
 
   async function handleSave() {
-    if (!form.project_name.trim() || !form.bid_amount) return
+    if (!editing) return
     setSaving(true)
-    const payload = {
-      bid_date: form.bid_date,
-      project_name: form.project_name,
-      property_type: form.property_type || null,
-      client_name: form.client_name || null,
-      referral_source: form.referral_source || null,
-      bid_amount: Number(form.bid_amount) * 10000,
-      competitor_amount: form.competitor_amount ? Number(form.competitor_amount) * 10000 : null,
-      result: form.result,
-      loss_reason: form.loss_reason || null,
-      notes: form.notes || null,
-    }
-    if (editId) {
-      await fetch(`/api/bids/${editId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-    } else {
-      await fetch("/api/bids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-    }
+    await fetch(`/api/bids/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...editing,
+        bid_amount: Number(editing.bid_amount),
+        competitor_amount: editing.competitor_amount ? Number(editing.competitor_amount) : null,
+      }),
+    })
     setSaving(false)
-    setShowForm(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
     load()
   }
 
-  async function handleDelete(id: number, name: string) {
-    if (!confirm(`「${name}」を削除しますか？`)) return
-    await fetch(`/api/bids/${id}`, { method: "DELETE" })
+  async function handleDelete() {
+    if (!editing) return
+    if (!confirm(`「${editing.project_name}」を削除しますか？`)) return
+    await fetch(`/api/bids/${editing.id}`, { method: "DELETE" })
+    closeDetail()
     load()
   }
 
-  // 統計
   const won = bids.filter((b) => b.result === "won")
   const lost = bids.filter((b) => b.result === "lost")
   const winRate = (won.length + lost.length) > 0
-    ? Math.round((won.length / (won.length + lost.length)) * 100)
-    : null
+    ? Math.round((won.length / (won.length + lost.length)) * 100) : null
   const avgWonAmount = won.length > 0
-    ? won.reduce((s, b) => s + b.bid_amount, 0) / won.length
-    : null
+    ? won.reduce((s, b) => s + b.bid_amount, 0) / won.length : null
   const avgLostAmount = lost.length > 0
-    ? lost.reduce((s, b) => s + b.bid_amount, 0) / lost.length
-    : null
-
-  const inputCls = "w-full bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-gray-400"
-  const labelCls = "block text-xs font-medium text-gray-600 mb-1"
+    ? lost.reduce((s, b) => s + b.bid_amount, 0) / lost.length : null
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">入札記録</h1>
-          <p className="text-xs text-gray-500 mt-0.5">過去の入札データを蓄積して予測精度を高めます</p>
-        </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={14} />
-          手動追加
-        </button>
+      <div className="mb-5">
+        <h1 className="text-xl font-bold text-gray-900">入札記録</h1>
+        <p className="text-xs text-gray-500 mt-0.5">
+          取り込みは「データ取込」から行えます
+        </p>
       </div>
 
       {/* 統計サマリー */}
@@ -187,8 +141,8 @@ export default function BidsPage() {
       <div className="flex gap-2 mb-4">
         {[
           { key: "", label: "すべて" },
-          { key: "won", label: "受注のみ" },
-          { key: "lost", label: "失注のみ" },
+          { key: "won", label: "受注" },
+          { key: "lost", label: "失注" },
           { key: "pending", label: "検討中" },
         ].map(({ key, label }) => (
           <button
@@ -203,13 +157,13 @@ export default function BidsPage() {
 
       {/* テーブル */}
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
+        <div className="flex justify-center py-12">
+          <Loader2 className="animate-spin text-gray-300" size={28} />
+        </div>
       ) : bids.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-200 rounded-xl px-4 py-12 text-center">
-          <p className="text-sm text-gray-400 mb-1">入札記録がまだありません</p>
-          <button onClick={openNew} className="text-xs text-blue-600 hover:underline">
-            最初の入札記録を追加 →
-          </button>
+          <p className="text-sm text-gray-400">入札記録がありません</p>
+          <p className="text-xs text-gray-400 mt-1">「データ取込」からExcel・PDFを取り込んでください</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -222,18 +176,19 @@ export default function BidsPage() {
                 <th className="text-right px-4 py-2.5 text-xs text-gray-500 font-medium">入札金額</th>
                 <th className="text-right px-4 py-2.5 text-xs text-gray-500 font-medium">競合金額</th>
                 <th className="text-center px-4 py-2.5 text-xs text-gray-500 font-medium">結果</th>
-                <th className="px-2 py-2.5" />
               </tr>
             </thead>
             <tbody>
               {bids.map((bid, i) => (
-                <tr key={bid.id} className={i < bids.length - 1 ? "border-b border-gray-50" : ""}>
+                <tr
+                  key={bid.id}
+                  onClick={() => openDetail(bid)}
+                  className={`cursor-pointer hover:bg-gray-50 transition-colors ${i < bids.length - 1 ? "border-b border-gray-50" : ""}`}
+                >
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmtDate(bid.bid_date)}</td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-800">{bid.project_name}</p>
-                    {bid.loss_reason && (
-                      <p className="text-xs text-red-400 mt-0.5">{bid.loss_reason}</p>
-                    )}
+                    {bid.loss_reason && <p className="text-xs text-red-400 mt-0.5">{bid.loss_reason}</p>}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{bid.property_type ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-800">{fmt(bid.bid_amount)}</td>
@@ -243,16 +198,6 @@ export default function BidsPage() {
                       {RESULT_LABELS[bid.result]}
                     </span>
                   </td>
-                  <td className="px-2 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(bid)} className="text-gray-300 hover:text-blue-500 transition-colors">
-                        <Pencil size={13} />
-                      </button>
-                      <button onClick={() => handleDelete(bid.id, bid.project_name)} className="text-gray-300 hover:text-red-400 transition-colors">
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -260,27 +205,28 @@ export default function BidsPage() {
         </div>
       )}
 
-      {/* 入力フォームモーダル */}
-      {showForm && (
+      {/* 詳細・編集モーダル */}
+      {selected && editing && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-base font-bold text-gray-900">
-                {editId ? "入札記録を編集" : "入札記録を追加"}
-              </h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
+              <h2 className="text-base font-bold text-gray-900 truncate pr-4">{selected.project_name}</h2>
+              <button onClick={closeDetail} className="text-gray-400 hover:text-gray-600 shrink-0">
                 <X size={18} />
               </button>
             </div>
+
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>入札日</label>
-                  <input type="date" value={form.bid_date} onChange={(e) => setForm((f) => ({ ...f, bid_date: e.target.value }))} className={inputCls} />
+                  <input type="date" value={editing.bid_date}
+                    onChange={(e) => setField("bid_date", e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>結果</label>
-                  <select value={form.result} onChange={(e) => setForm((f) => ({ ...f, result: e.target.value as any }))} className={inputCls}>
+                  <select value={editing.result}
+                    onChange={(e) => setField("result", e.target.value as Bid["result"])} className={inputCls}>
                     <option value="pending">検討中</option>
                     <option value="won">受注</option>
                     <option value="lost">失注</option>
@@ -289,63 +235,75 @@ export default function BidsPage() {
               </div>
 
               <div>
-                <label className={labelCls}>案件名 <span className="text-red-400">*</span></label>
-                <input type="text" value={form.project_name} onChange={(e) => setForm((f) => ({ ...f, project_name: e.target.value }))} placeholder="○○新築工事" className={inputCls} />
+                <label className={labelCls}>案件名</label>
+                <input type="text" value={editing.project_name}
+                  onChange={(e) => setField("project_name", e.target.value)} className={inputCls} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>物件種類</label>
-                  <select value={form.property_type} onChange={(e) => setForm((f) => ({ ...f, property_type: e.target.value }))} className={inputCls}>
-                    <option value="">選択</option>
+                  <select value={editing.property_type ?? ""}
+                    onChange={(e) => setField("property_type", e.target.value || null)} className={inputCls}>
+                    <option value="">—</option>
                     {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={labelCls}>施主名</label>
-                  <input type="text" value={form.client_name} onChange={(e) => setForm((f) => ({ ...f, client_name: e.target.value }))} placeholder="○○様" className={inputCls} />
+                  <input type="text" value={editing.client_name ?? ""}
+                    onChange={(e) => setField("client_name", e.target.value || null)} className={inputCls} />
                 </div>
               </div>
 
               <div>
                 <label className={labelCls}>紹介先・ルート</label>
-                <input type="text" value={form.referral_source} onChange={(e) => setForm((f) => ({ ...f, referral_source: e.target.value }))} placeholder="直接、工務店、不動産 など" className={inputCls} />
+                <input type="text" value={editing.referral_source ?? ""}
+                  onChange={(e) => setField("referral_source", e.target.value || null)} className={inputCls} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>入札金額（万円）<span className="text-red-400">*</span></label>
-                  <input type="number" value={form.bid_amount} onChange={(e) => setForm((f) => ({ ...f, bid_amount: e.target.value }))} placeholder="1500" className={inputCls} />
+                  <label className={labelCls}>入札金額（万円）</label>
+                  <input type="number" value={Math.round(editing.bid_amount / 10000)}
+                    onChange={(e) => setField("bid_amount", Number(e.target.value) * 10000)} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>競合金額（万円）</label>
-                  <input type="number" value={form.competitor_amount} onChange={(e) => setForm((f) => ({ ...f, competitor_amount: e.target.value }))} placeholder="わかれば" className={inputCls} />
+                  <input type="number" value={editing.competitor_amount ? Math.round(editing.competitor_amount / 10000) : ""}
+                    onChange={(e) => setField("competitor_amount", e.target.value ? Number(e.target.value) * 10000 : null)}
+                    placeholder="わかれば" className={inputCls} />
                 </div>
               </div>
 
-              {form.result === "lost" && (
+              {editing.result === "lost" && (
                 <div>
                   <label className={labelCls}>失注理由</label>
-                  <input type="text" value={form.loss_reason} onChange={(e) => setForm((f) => ({ ...f, loss_reason: e.target.value }))} placeholder="価格、他社、白紙など" className={inputCls} />
+                  <input type="text" value={editing.loss_reason ?? ""}
+                    onChange={(e) => setField("loss_reason", e.target.value || null)}
+                    placeholder="価格、他社、白紙など" className={inputCls} />
                 </div>
               )}
 
               <div>
                 <label className={labelCls}>備考</label>
-                <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none placeholder:text-gray-400" />
+                <textarea value={editing.notes ?? ""} rows={2}
+                  onChange={(e) => setField("notes", e.target.value || null)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none placeholder:text-gray-400" />
               </div>
             </div>
+
             <div className="flex gap-2 px-6 pb-6">
-              <button onClick={() => setShowForm(false)} className="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                キャンセル
+              <button onClick={handleDelete} className="p-2 text-gray-300 hover:text-red-400 transition-colors">
+                <Trash2 size={15} />
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !form.project_name.trim() || !form.bid_amount}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                {saving ? "保存中" : "保存"}
+              <button onClick={closeDetail} className="flex-1 px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                閉じる
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <Check size={13} /> : null}
+                {saving ? "保存中" : saved ? "保存済み" : "保存する"}
               </button>
             </div>
           </div>
