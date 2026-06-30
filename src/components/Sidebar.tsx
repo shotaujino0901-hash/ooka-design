@@ -6,13 +6,20 @@ import { usePathname } from "next/navigation"
 import {
   MessageSquare, Database, RefreshCw, Home, BarChart2, PieChart, ClipboardList,
   ChevronDown, ChevronRight, Settings, FileText, BarChart3, NotebookPen,
-  Lightbulb, Globe, Users,
+  Lightbulb, Globe, Users, type LucideIcon,
 } from "lucide-react"
 
-// 入札関連パス（/finance 配下だが別グループに分離）
+type NavChild = { href: string; label: string; icon: LucideIcon }
+type NavGroup = { key: string; label: string; icon: LucideIcon; children: NavChild[] }
+type NavLink  = { href: string; label: string; icon: LucideIcon }
+
+function isGroup(item: NavGroup | NavLink): item is NavGroup {
+  return "children" in item
+}
+
 const BID_PATHS = ["/finance/bids", "/finance/market-bids", "/finance/predict"]
 
-const nav = [
+const nav: (NavGroup | NavLink)[] = [
   { href: "/", label: "ホーム", icon: Home },
   {
     key: "finance",
@@ -46,7 +53,11 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   const isBidPath = BID_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
-  const isFinancePath = !isBidPath && (pathname === "/finance" || pathname.startsWith("/finance/") || pathname.startsWith("/reports"))
+  const isFinancePath = !isBidPath && (
+    pathname === "/finance" ||
+    pathname.startsWith("/finance/") ||
+    pathname.startsWith("/reports")
+  )
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     finance: isFinancePath,
@@ -65,10 +76,10 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 p-3 space-y-1">
         {nav.map((item) => {
-          if ("children" in item) {
-            const { key = "", label, icon: Icon, children } = item
+          if (isGroup(item)) {
+            const { key, label, icon: Icon, children } = item
             const isActive = key === "finance" ? isFinancePath : key === "bids" ? isBidPath : false
-            const isOpen = openGroups[key] || isActive
+            const isOpen = !!openGroups[key] || isActive
             return (
               <div key={key}>
                 <button
