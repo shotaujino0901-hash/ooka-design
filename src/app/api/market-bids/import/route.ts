@@ -271,9 +271,11 @@ export async function POST(req: Request) {
     }
 
     let extracted: Record<string, unknown>[]
+    let _debugRawText = ""
 
     if (name.endsWith(".pdf")) {
       const rawText = await extractTextFromPDF(buffer)
+      _debugRawText = rawText.slice(0, 1500)
       if (isHamamatsuBidPDF(rawText)) {
         // 1ページ1案件として個別処理（ページ跨ぎ分割問題を回避）
         const pages = await extractPDFPages(buffer)
@@ -320,7 +322,15 @@ export async function POST(req: Request) {
       return Response.json({ saved: rows.length, records: rows })
     }
 
-    return Response.json({ saved: 0, records: extracted, _debug: extracted.length === 0 ? "0件: PDFテキスト抽出またはパースに失敗している可能性があります" : undefined })
+    return Response.json({
+      saved: 0,
+      records: extracted,
+      _debug: {
+        count: extracted.length,
+        isHamamatsu: name.endsWith(".pdf") ? isHamamatsuBidPDF(_debugRawText) : null,
+        rawTextPreview: _debugRawText,
+      },
+    })
   } catch (e: unknown) {
     return Response.json(
       { error: e instanceof Error ? e.message : "インポートに失敗しました" },
