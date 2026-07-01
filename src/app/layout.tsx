@@ -7,8 +7,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "大岡設計 プラットフォーム",
-  description: "大岡建築設計事務所 社内統合プラットフォーム",
+  title: "大岡成光建築事務所 プラットフォーム",
+  description: "株式会社 大岡成光建築事務所 社内統合プラットフォーム",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

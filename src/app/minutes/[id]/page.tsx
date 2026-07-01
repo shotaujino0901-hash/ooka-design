@@ -264,7 +264,7 @@ export default function MinuteDetailPage({ params }: { params: Promise<{ id: str
             <div className="p-8 flex justify-center">
               <div className="bg-white border border-gray-200 rounded-xl w-full max-w-2xl p-10">
                 <div className="mb-6">
-                  <p className="text-xs text-gray-400 mb-1">大岡建築設計事務所</p>
+                  <p className="text-xs text-gray-400 mb-1">株式会社 大岡成光建築事務所</p>
                   <h1 className="text-2xl font-bold text-gray-900">議　事　録</h1>
                 </div>
 

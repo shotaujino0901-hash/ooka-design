@@ -107,7 +107,7 @@ function MonthlyReport() {
       ) : (
         <>
           <div className="mb-5">
-            <p className="text-xs text-gray-400">大岡建築設計事務所</p>
+            <p className="text-xs text-gray-400">株式会社 大岡成光建築事務所</p>
             <h2 className="text-lg font-bold text-gray-900">{year}年{month}月　月次経営レポート</h2>
             <p className="text-xs text-gray-400 mt-0.5">出力日: {new Date().toLocaleDateString("ja-JP")}</p>
           </div>
@@ -221,7 +221,7 @@ function TermReport() {
       ) : (
         <>
           <div className="mb-5">
-            <p className="text-xs text-gray-400">大岡建築設計事務所</p>
+            <p className="text-xs text-gray-400">株式会社 大岡成光建築事務所</p>
             <h2 className="text-lg font-bold text-gray-900">{termLabel}　期別サマリーレポート</h2>
             <p className="text-xs text-gray-400 mt-0.5">出力日: {new Date().toLocaleDateString("ja-JP")}</p>
           </div>
@@ -321,7 +321,7 @@ function ProjectReport() {
         </div>
 
         <div className="mb-5">
-          <p className="text-xs text-gray-400">大岡建築設計事務所</p>
+          <p className="text-xs text-gray-400">株式会社 大岡成光建築事務所</p>
           <h2 className="text-lg font-bold text-gray-900">案件詳細レポート</h2>
           <p className="text-xs text-gray-400 mt-0.5">出力日: {new Date().toLocaleDateString("ja-JP")}</p>
         </div>

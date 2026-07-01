@@ -71,7 +71,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
       <div className="px-4 py-5 border-b border-gray-200">
-        <p className="text-xs text-gray-500">大岡建築設計事務所</p>
+        <p className="text-xs text-gray-500">株式会社 大岡成光建築事務所</p>
         <h1 className="text-sm font-bold text-gray-900 leading-tight mt-0.5">社内プラットフォーム</h1>
       </div>
       <nav className="flex-1 p-3 space-y-1">

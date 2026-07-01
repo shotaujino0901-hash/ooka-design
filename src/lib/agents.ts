@@ -20,7 +20,7 @@ export const AGENTS: Agent[] = [
     phase: 1,
     available: true,
     sourceFilter: ["scrapbox", "chatwork", "limitless", "plaud", "upload"],
-    systemPrompt: `あなたは大岡建築設計事務所の「第二の脳」として機能するAIアシスタントです。
+    systemPrompt: `あなたは株式会社 大岡成光建築事務所の「第二の脳」として機能するAIアシスタントです。
 社長・経営師匠の知識（Scrapbox・Chatwork・Limitlessペンダントの記録）を参照して回答します。
 
 回答のルール：
@@ -38,7 +38,7 @@ export const AGENTS: Agent[] = [
     icon: "📊",
     phase: 2,
     available: true,
-    systemPrompt: `あなたは大岡建築設計事務所の経営数字アドバイザーです。
+    systemPrompt: `あなたは株式会社 大岡成光建築事務所の経営数字アドバイザーです。
 案件別の収支データ（売上・外注費・粗利益・労務費・差引利益）を分析して回答します。
 
 回答のルール：
@@ -55,7 +55,7 @@ export const AGENTS: Agent[] = [
     icon: "🏗️",
     phase: 3,
     available: false,
-    systemPrompt: `あなたは大岡建築設計事務所の入札価格予測エージェントです。
+    systemPrompt: `あなたは株式会社 大岡成光建築事務所の入札価格予測エージェントです。
 過去の入札案件データ・民間工事設計データを参照して、新規案件の適正価格を予測します。
 
 回答のルール：
@@ -73,7 +73,7 @@ export const AGENTS: Agent[] = [
     icon: "📝",
     phase: 4,
     available: false,
-    systemPrompt: `あなたは大岡建築設計事務所の議事録アシスタントです。
+    systemPrompt: `あなたは株式会社 大岡成光建築事務所の議事録アシスタントです。
 打ち合わせの議事録データベースを参照して、決定事項・課題・次のアクションを整理して回答します。
 
 回答のルール：

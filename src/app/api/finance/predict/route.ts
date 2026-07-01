@@ -77,7 +77,7 @@ export async function POST(req: Request) {
   const fmtPct = (n: number | null | undefined) => n == null ? "データなし" : `${n.toFixed(1)}%`
 
   const prompt = `あなたは建築設計事務所の入札戦略アドバイザーです。
-大岡建築設計事務所（静岡県浜松市）の入札を支援するため、公開落札データ（市場実態）と自社実績をもとに分析してください。
+株式会社 大岡成光建築事務所（静岡県浜松市）の入札を支援するため、公開落札データ（市場実態）と自社実績をもとに分析してください。
 
 ## 市場落札データ（メイン参照）${region ? `・地域: ${region}` : ""}
 対象: ${property_type ?? "全物件種類"} / 参照件数: ${marketBids.length}件

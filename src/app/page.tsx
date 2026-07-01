@@ -89,7 +89,7 @@ export default function HomePage() {
       {/* Header */}
       <div className="mb-6">
         <p className="text-sm text-gray-400">{dateLabel}</p>
-        <h1 className="text-2xl font-bold text-gray-900 mt-0.5">大岡建築設計事務所</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mt-0.5">株式会社 大岡成光建築事務所</h1>
         <p className="text-sm text-gray-500 mt-0.5">社内統合プラットフォーム</p>
       </div>
 
