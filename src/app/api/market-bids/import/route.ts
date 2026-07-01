@@ -195,6 +195,25 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   return result.text
 }
 
+// 1ページずつテキストを取得（ページ分割対応）
+async function extractPDFPages(buffer: Buffer): Promise<string[]> {
+  try {
+    const pdfParse = await import("pdf-parse/lib/pdf-parse.js")
+    const pages: string[] = []
+    await pdfParse.default(buffer, {
+      pagerender: (pageData: any) =>
+        pageData.getTextContent().then((tc: any) => {
+          const str = (tc.items as Array<{ str: string }>).map((i) => i.str).join(" ")
+          pages.push(str)
+          return str
+        }),
+    })
+    return pages
+  } catch {
+    return []
+  }
+}
+
 async function claudeExtract(rawText: string): Promise<Record<string, unknown>[]> {
   const prompt = `以下は入札結果の公開データです。
 各落札案件を読み取り、JSON配列として返してください。
@@ -256,10 +275,17 @@ export async function POST(req: Request) {
     if (name.endsWith(".pdf")) {
       const rawText = await extractTextFromPDF(buffer)
       if (isHamamatsuBidPDF(rawText)) {
-        // 浜松市入札結果フォーマット → 専用パーサー、失敗時はClaudeにフォールバック
-        extracted = parseHamamatsuBidPDF(rawText, file.name)
-        if (extracted.length === 0) {
-          extracted = await claudeExtract(rawText)
+        // 1ページ1案件として個別処理（ページ跨ぎ分割問題を回避）
+        const pages = await extractPDFPages(buffer)
+        if (pages.length > 0) {
+          const allRecords: Record<string, unknown>[] = []
+          for (const pageText of pages) {
+            allRecords.push(...parseHamamatsuBidPDF(pageText, file.name))
+          }
+          extracted = allRecords.length > 0 ? allRecords : await claudeExtract(rawText)
+        } else {
+          extracted = parseHamamatsuBidPDF(rawText, file.name)
+          if (extracted.length === 0) extracted = await claudeExtract(rawText)
         }
       } else {
         extracted = await claudeExtract(rawText)
