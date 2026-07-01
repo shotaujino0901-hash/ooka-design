@@ -15,8 +15,7 @@ type BidderEntry = {
 
 function isHamamatsuBidPDF(text: string): boolean {
   return (
-    text.includes("開札執行日時令和") &&
-    text.includes("法人番号") &&
+    /開札執行日時[\s]*令和/.test(text) &&
     text.includes("落札決定金額")
   )
 }
@@ -44,10 +43,11 @@ function parseBidderList(text: string): BidderEntry[] {
     .filter(Boolean)
 
   const bidders: BidderEntry[] = []
-  let state: "num" | "name" | "houjin" | "amount" = "num"
+  let state: "num" | "name" | "amount" | "result" = "num"
   let current: Partial<BidderEntry> = {}
 
   for (const line of lines) {
+    // No 行（どの状態でも優先）
     if (/^\d+$/.test(line) && parseInt(line) > 0 && parseInt(line) < 30) {
       if (current.name) bidders.push(current as BidderEntry)
       current = { no: parseInt(line), name: "", amount: null, result: "参加" }
@@ -59,25 +59,36 @@ function parseBidderList(text: string): BidderEntry[] {
       if (line.startsWith("法人番号")) {
         state = "amount"
       } else {
-        // 会社名が複数行にわたる場合を結合
         current.name = (current.name || "") + line
       }
       continue
     }
 
     if (state === "amount") {
-      if (line === "辞退") {
-        current.result = "辞退"
-      } else if (line === "未受領") {
-        current.result = "未受領"
+      if (line === "辞退" || line === "未受領") {
+        current.result = line
+        state = "num"
       } else if (line.startsWith("法人番号")) {
-        // 前エントリで amount が来る前に次の 法人番号 が来たケース（スキップ）
+        // スキップ
       } else {
-        const m = line.match(/([\d,]+)(落札|参加|失格)?/)
+        // 金額（結果が同行 or 次行に来るケース両対応）
+        const m = line.match(/([\d,]+)[\s]*(落札|参加|失格)?/)
         if (m) {
           current.amount = parseAmount(m[1])
-          current.result = m[2] || "参加"
+          if (m[2]) {
+            current.result = m[2]
+            state = "num"
+          } else {
+            state = "result" // 次行で結果を待つ
+          }
         }
+      }
+      continue
+    }
+
+    if (state === "result") {
+      if (/^(落札|参加|失格|辞退|未受領)$/.test(line)) {
+        current.result = line
       }
       state = "num"
     }
@@ -92,14 +103,14 @@ function parseHamamatsuBidPDF(
   sourceFile: string
 ): Record<string, unknown>[] {
   // 「開札執行日時」ごとにケースを分割
-  const blocks = text.split(/(?=開札執行日時令和)/)
+  const blocks = text.split(/(?=開札執行日時[\s]*令和)/)
   const records: Record<string, unknown>[] = []
 
   for (const block of blocks) {
-    if (!block.includes("開札執行日時令和")) continue
+    if (!/開札執行日時[\s]*令和/.test(block)) continue
 
     // 開札日
-    const dateM = block.match(/開札執行日時(令和\d+-\d+-\d+)/)
+    const dateM = block.match(/開札執行日時[\s]*(令和\d+-\d+-\d+)/)
     const bidDate = dateM ? parseReiwaDate(dateM[1]) : null
 
     // 案件名（改行またはインライン）
@@ -117,12 +128,12 @@ function parseHamamatsuBidPDF(
     const regionM = locationRaw.match(/(浜松市[^\s　\u3000]*)/)
     const region = regionM ? regionM[1] : locationRaw.slice(0, 30) || null
 
-    // 予定価格（税抜き）
-    const estimatedM = block.match(/予定価格\(税抜き\)([\d,]+)円/)
+    // 予定価格（税抜き） — 全角・半角括弧両対応
+    const estimatedM = block.match(/予定価格[（(]税抜き[）)][\s]*([\d,]+)/)
     const estimatedPrice = estimatedM ? parseAmount(estimatedM[1]) : null
 
     // 最低制限価格（税抜き）
-    const minPriceM = block.match(/最低制限価格\(税抜き\)([\d,]+)円/)
+    const minPriceM = block.match(/最低制限価格[（(]税抜き[）)][\s]*([\d,]+)/)
     const minimumPrice = minPriceM ? parseAmount(minPriceM[1]) : null
 
     // 落札者名
@@ -132,7 +143,7 @@ function parseHamamatsuBidPDF(
       : null
 
     // 落札決定金額（税抜き）
-    const winAmtM = block.match(/落札決定金額([\d,]+)円/)
+    const winAmtM = block.match(/落札決定金額[\s]*([\d,]+)/)
     const winningAmount = winAmtM ? parseAmount(winAmtM[1]) : null
     if (!winningAmount) continue // 落札金額なしはスキップ
 
