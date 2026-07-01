@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Check, Printer, Trash2, ArrowLeft, Plus, X } from "lucide-react"
+import { Loader2, Check, Printer, Trash2, ArrowLeft, Plus, X, FileText } from "lucide-react"
 
 type TodoItem = {
   text: string
@@ -40,6 +40,8 @@ export default function MinuteDetailPage({ params }: { params: Promise<{ id: str
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [tab, setTab] = useState<"edit" | "preview">("edit")
+  const [generatingSlide, setGeneratingSlide] = useState(false)
+  const [slideError, setSlideError] = useState<string | null>(null)
 
   useEffect(() => { params.then((p) => setId(p.id)) }, [params])
 
@@ -106,6 +108,30 @@ export default function MinuteDetailPage({ params }: { params: Promise<{ id: str
     setTimeout(() => window.print(), 200)
   }
 
+  async function handleGenerateSlide() {
+    if (!id) return
+    setGeneratingSlide(true)
+    setSlideError(null)
+    try {
+      const res = await fetch(`/api/minutes/${id}/slide`, { method: "POST" })
+      if (!res.ok) throw new Error("生成に失敗しました")
+      const html = await res.text()
+      const blob = new Blob([html], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${minute?.title ?? "議事録"}_振り返り資料.html`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setSlideError(e.message ?? "エラーが発生しました")
+    } finally {
+      setGeneratingSlide(false)
+    }
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="animate-spin text-gray-300" size={32} />
@@ -131,6 +157,14 @@ export default function MinuteDetailPage({ params }: { params: Promise<{ id: str
             <p className="text-xs text-gray-400">{fmtJp(minute.meeting_date)}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleGenerateSlide}
+              disabled={generatingSlide}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {generatingSlide ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              {generatingSlide ? "生成中..." : "資料生成"}
+            </button>
             <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
               <Printer size={13} />
               印刷・PDF
@@ -148,6 +182,13 @@ export default function MinuteDetailPage({ params }: { params: Promise<{ id: str
             </button>
           </div>
         </div>
+
+        {/* 資料生成エラー */}
+        {slideError && (
+          <div className="no-print px-6 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600 shrink-0">
+            {slideError}
+          </div>
+        )}
 
         {/* タブ */}
         <div className="no-print flex border-b border-gray-200 bg-white shrink-0">
