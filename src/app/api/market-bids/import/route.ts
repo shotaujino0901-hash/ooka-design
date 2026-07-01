@@ -195,23 +195,59 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   return result.text
 }
 
-// 1ページずつテキストを取得（ページ分割対応）
-async function extractPDFPages(buffer: Buffer): Promise<string[]> {
-  try {
-    const pdfParse = await import("pdf-parse/lib/pdf-parse.js")
-    const pages: string[] = []
-    await (pdfParse.default as any)(buffer, {
-      pagerender: (pageData: any) =>
-        pageData.getTextContent().then((tc: any) => {
-          const str = (tc.items as Array<{ str: string }>).map((i) => i.str).join(" ")
-          pages.push(str)
-          return str
-        }),
-    })
-    return pages
-  } catch {
-    return []
-  }
+// テキストが文字化け（バイナリ）かどうか判定
+function isGarbledText(text: string): boolean {
+  if (text.includes("\u0000")) return true
+  if (text.trim().length < 50) return true
+  return false
+}
+
+// PDF を直接 Claude Vision で読み取り（テキスト抽出不可の場合）
+async function claudeExtractFromPDFVision(
+  buffer: Buffer,
+  sourceFile: string
+): Promise<Record<string, unknown>[]> {
+  const base64 = buffer.toString("base64")
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: base64 },
+          } as any,
+          {
+            type: "text",
+            text: `このPDFは浜松市の入札結果データです。全ての案件を読み取り、JSON配列として返してください。
+
+## 抽出するフィールド
+- bid_date: 開札執行日時（YYYY-MM-DD形式）
+- project_name: 案件名（必須）
+- property_type: "官公庁"
+- client_name: "浜松市"
+- region: 工事箇所から地域名
+- winning_bidder: 落札者名
+- winning_amount: 落札決定金額（円単位の整数）
+- estimated_price: 予定価格（税抜き）（円単位の整数）
+- minimum_price: 最低制限価格（税抜き）（円単位の整数）
+- all_bidders: [{no, name, amount, result}]（業者一覧の全参加者）
+- source: "${sourceFile}"
+- notes: null
+
+## 注意
+- 複数ページに複数案件ある場合は全て抽出
+- 金額のカンマは除いて整数で
+- JSONのみ返す（コードブロック不要）`,
+          },
+        ],
+      },
+    ],
+  })
+  const text = message.content[0].type === "text" ? message.content[0].text : "[]"
+  return JSON.parse(text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, ""))
 }
 
 async function claudeExtract(rawText: string): Promise<Record<string, unknown>[]> {
@@ -275,20 +311,15 @@ export async function POST(req: Request) {
 
     if (name.endsWith(".pdf")) {
       const rawText = await extractTextFromPDF(buffer)
-      _debugRawText = rawText.slice(0, 1500)
-      if (isHamamatsuBidPDF(rawText)) {
-        // 1ページ1案件として個別処理（ページ跨ぎ分割問題を回避）
-        const pages = await extractPDFPages(buffer)
-        if (pages.length > 0) {
-          const allRecords: Record<string, unknown>[] = []
-          for (const pageText of pages) {
-            allRecords.push(...parseHamamatsuBidPDF(pageText, file.name))
-          }
-          extracted = allRecords.length > 0 ? allRecords : await claudeExtract(rawText)
-        } else {
-          extracted = parseHamamatsuBidPDF(rawText, file.name)
-          if (extracted.length === 0) extracted = await claudeExtract(rawText)
-        }
+      _debugRawText = rawText.slice(0, 200)
+
+      if (isGarbledText(rawText)) {
+        // フォントエンコーディング問題でテキスト抽出不可 → Claude Vision で直接読み取り
+        extracted = await claudeExtractFromPDFVision(buffer, file.name)
+      } else if (isHamamatsuBidPDF(rawText)) {
+        // 浜松市指名競争入札結果フォーマット → 専用パーサー
+        extracted = parseHamamatsuBidPDF(rawText, file.name)
+        if (extracted.length === 0) extracted = await claudeExtract(rawText)
       } else {
         extracted = await claudeExtract(rawText)
       }
