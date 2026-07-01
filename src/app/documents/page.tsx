@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Trash2, AlertTriangle } from "lucide-react"
+import { Search, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react"
+
+const PAGE_SIZE = 100
 
 type Doc = {
   id: number
@@ -30,6 +32,8 @@ const SOURCE_COLORS: Record<string, string> = {
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<Doc[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [q, setQ] = useState("")
   const [source, setSource] = useState("")
   const [loading, setLoading] = useState(false)
@@ -38,14 +42,16 @@ export default function DocumentsPage() {
   const [deduplicating, setDeduplicating] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  async function search() {
+  async function search(p = page) {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ limit: "500" })
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(p * PAGE_SIZE) })
       if (q) params.set("q", q)
       if (source) params.set("source", source)
       const res = await fetch(`/api/documents?${params}`)
-      setDocs(await res.json())
+      const json = await res.json()
+      setDocs(json.data ?? [])
+      setTotal(json.total ?? 0)
     } catch {
       setDocs([])
     } finally {
@@ -53,7 +59,16 @@ export default function DocumentsPage() {
     }
   }
 
-  useEffect(() => { search() }, [source])
+  useEffect(() => { search(page) }, [source, page])
+
+  function goPage(p: number) {
+    setPage(p)
+  }
+
+  function handleSearch() {
+    setPage(0)
+    search(0)
+  }
 
   function baseTitle(title: string) {
     return title.replace(/#\d+$/, "").trim()
@@ -160,7 +175,7 @@ export default function DocumentsPage() {
             placeholder="タイトル・本文を検索..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && search()}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           />
         </div>
         <select
@@ -174,7 +189,7 @@ export default function DocumentsPage() {
           ))}
         </select>
         <button
-          onClick={search}
+          onClick={handleSearch}
           className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
         >
           検索
@@ -195,6 +210,20 @@ export default function DocumentsPage() {
       ) : docs.length === 0 ? (
         <p className="text-sm text-gray-400">ドキュメントがありません。まず「データ同期」でデータを取り込んでください。</p>
       ) : (
+        <div className="flex items-center justify-between mb-3 text-sm text-gray-500">
+          <span>全 {total.toLocaleString()} 件 / {page * PAGE_SIZE + 1}〜{Math.min((page + 1) * PAGE_SIZE, total)} 件表示</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => goPage(page - 1)} disabled={page === 0}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-2">{page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+            <button onClick={() => goPage(page + 1)} disabled={(page + 1) * PAGE_SIZE >= total}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
         <div className="space-y-2">
           {docs.map((doc) => {
             const key = `${doc.source}::${baseTitle(doc.title)}`
@@ -253,6 +282,19 @@ export default function DocumentsPage() {
             )
           })}
         </div>
+        {total > PAGE_SIZE && (
+          <div className="flex justify-center items-center gap-2 mt-4">
+            <button onClick={() => goPage(page - 1)} disabled={page === 0}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">
+              <ChevronLeft size={14} /> 前へ
+            </button>
+            <span className="text-sm text-gray-500">{page + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
+            <button onClick={() => goPage(page + 1)} disabled={(page + 1) * PAGE_SIZE >= total}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">
+              次へ <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       )}
     </div>
   )

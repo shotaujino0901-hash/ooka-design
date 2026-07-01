@@ -10,16 +10,16 @@ export async function GET(req: Request) {
   const db = supabaseAdmin()
   let query = db
     .from("documents")
-    .select("id, source, project, title, tags, source_updated_at")
+    .select("id, source, project, title, tags, source_updated_at", { count: "exact" })
     .order("source_updated_at", { ascending: false })
     .range(offset, offset + limit - 1)
 
   if (source) query = query.eq("source", source)
   if (q) query = query.or(`title.ilike.%${q}%,content.ilike.%${q}%`)
 
-  const { data, error } = await query
+  const { data, error, count } = await query
   if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data ?? [])
+  return Response.json({ data: data ?? [], total: count ?? 0 })
 }
 
 // タイトル単位でまとめて削除（アップロードの重複整理用）
