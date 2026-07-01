@@ -200,7 +200,7 @@ async function extractPDFPages(buffer: Buffer): Promise<string[]> {
   try {
     const pdfParse = await import("pdf-parse/lib/pdf-parse.js")
     const pages: string[] = []
-    await pdfParse.default(buffer, {
+    await (pdfParse.default as any)(buffer, {
       pagerender: (pageData: any) =>
         pageData.getTextContent().then((tc: any) => {
           const str = (tc.items as Array<{ str: string }>).map((i) => i.str).join(" ")
