@@ -47,41 +47,54 @@ function extractTags(lines: { text: string }[]): string[] {
   return [...tags]
 }
 
-export async function POST() {
-  const projects = getProjects()
+async function syncProject(project: string): Promise<number> {
+  const pages = await fetchPages(project)
+
+  // 10件ずつ並列取得
+  let count = 0
+  for (let i = 0; i < pages.length; i += 10) {
+    const batch = pages.slice(i, i + 10)
+    await Promise.all(
+      batch.map(async (pageMeta) => {
+        const page = await fetchPageContent(project, pageMeta.title)
+        if (!page) return
+
+        const lines = page.lines ?? []
+        const content = lines.map((l) => l.text).join("\n").trim()
+        if (!content) return
+
+        const tags = extractTags(lines)
+        const updatedAt = pageMeta.updated
+          ? new Date(pageMeta.updated * 1000).toISOString()
+          : null
+
+        await ingestDoc({
+          source: "scrapbox",
+          source_id: `${project}/${pageMeta.title}`,
+          project,
+          title: pageMeta.title,
+          content,
+          tags,
+          metadata: { project },
+          source_updated_at: updatedAt,
+        })
+        count++
+      })
+    )
+  }
+  return count
+}
+
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}))
+  const targetProject: string | undefined = body.project
+
+  const projects = targetProject ? [targetProject] : getProjects()
   let total = 0
   const byProject: Record<string, number> = {}
 
   for (const project of projects) {
-    const pages = await fetchPages(project)
-    let count = 0
-
-    for (const pageMeta of pages) {
-      const page = await fetchPageContent(project, pageMeta.title)
-      if (!page) continue
-
-      const lines = page.lines ?? []
-      const content = lines.map((l) => l.text).join("\n").trim()
-      if (!content) continue
-
-      const tags = extractTags(lines)
-      const updatedAt = pageMeta.updated
-        ? new Date(pageMeta.updated * 1000).toISOString()
-        : null
-
-      await ingestDoc({
-        source: "scrapbox",
-        source_id: `${project}/${pageMeta.title}`,
-        project,
-        title: pageMeta.title,
-        content,
-        tags,
-        metadata: { project },
-        source_updated_at: updatedAt,
-      })
-      count++
-    }
-
+    const count = await syncProject(project)
     byProject[project] = count
     total += count
   }

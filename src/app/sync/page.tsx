@@ -15,6 +15,13 @@ const RESULT_COLORS: Record<string, string> = {
 type Stats = { source: string; count: number }[]
 type SyncResult = { status: string; synced?: number; total?: number; by_project?: Record<string, number> }
 
+const SCRAPBOX_PROJECTS = [
+  "5co-powerup-2025-2026","ProjectMEMO","PBC","kanritai","estostep","syuumeisya",
+  "komonsince2022","coursetrainer","ookadesign1984-43251836","PBCall","kouhou2023",
+  "estoTOKYOtrainingpw120","ctm-since2023","kyoudaikai","TOKYOTrainingPW120",
+  "kannritaihead","CLINIC-ooka","powerups","5syagoudoukennsyuu",
+]
+
 const SOURCE_LABELS: Record<string, string> = {
   scrapbox: "Scrapbox",
   chatwork: "Chatwork",
@@ -25,6 +32,8 @@ export default function SyncPage() {
   const [stats, setStats] = useState<Stats>([])
   const [results, setResults] = useState<Record<string, SyncResult | string>>({})
   const [loading, setLoading] = useState<Record<string, boolean>>({})
+  const [scrapboxProjectResults, setScrapboxProjectResults] = useState<Record<string, { count?: number; error?: string }>>({})
+  const [scrapboxProjectLoading, setScrapboxProjectLoading] = useState<Record<string, boolean>>({})
   const [uploadResult, setUploadResult] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -68,6 +77,27 @@ export default function SyncPage() {
       setResults((r) => ({ ...r, [target]: e instanceof Error ? e.message : "エラーが発生しました" }))
     } finally {
       setLoading((l) => ({ ...l, [target]: false }))
+      loadStats()
+    }
+  }
+
+  async function handleSyncScrapboxProject(project: string) {
+    setScrapboxProjectLoading((l) => ({ ...l, [project]: true }))
+    setScrapboxProjectResults((r) => ({ ...r, [project]: {} }))
+    try {
+      const res = await fetch("/api/sync/scrapbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "エラー")
+      const count = data.by_project?.[project] ?? data.total ?? 0
+      setScrapboxProjectResults((r) => ({ ...r, [project]: { count } }))
+    } catch (e: unknown) {
+      setScrapboxProjectResults((r) => ({ ...r, [project]: { error: e instanceof Error ? e.message : "エラー" } }))
+    } finally {
+      setScrapboxProjectLoading((l) => ({ ...l, [project]: false }))
       loadStats()
     }
   }
@@ -185,7 +215,41 @@ export default function SyncPage() {
 
       {/* 自動同期ソース */}
       <div className="space-y-4 mb-6">
-        {(["scrapbox", "chatwork", "limitless"] as const).map((target) => {
+        {/* Scrapbox: プロジェクト別 */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">Scrapbox</h2>
+          <p className="text-xs text-gray-500 mb-3">プロジェクトごとに同期します（タイムアウト防止のため1件ずつ）</p>
+          <div className="space-y-2">
+            {SCRAPBOX_PROJECTS.map((project) => {
+              const isLoading = scrapboxProjectLoading[project]
+              const result = scrapboxProjectResults[project]
+              return (
+                <div key={project} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-sm text-gray-700 font-mono">{project}</span>
+                  <div className="flex items-center gap-2">
+                    {result?.count !== undefined && (
+                      <span className="text-xs text-green-600 flex items-center gap-0.5"><Check size={11} />{result.count}件</span>
+                    )}
+                    {result?.error && (
+                      <span className="text-xs text-red-500 flex items-center gap-0.5"><AlertCircle size={11} />{result.error}</span>
+                    )}
+                    <button
+                      onClick={() => handleSyncScrapboxProject(project)}
+                      disabled={isLoading}
+                      className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isLoading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                      {isLoading ? "同期中" : "同期"}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Chatwork / Limitless */}
+        {(["chatwork", "limitless"] as const).map((target) => {
           const result = results[target]
           const isLoading = loading[target]
           return (
@@ -194,7 +258,6 @@ export default function SyncPage() {
                 <div>
                   <h2 className="font-semibold text-gray-900">{SOURCE_LABELS[target]}</h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {target === "scrapbox" && "全プロジェクトのページを取り込みます"}
                     {target === "chatwork" && "全ルームのメッセージを取り込みます"}
                     {target === "limitless" && "Lifelog（会話記録）を取り込みます"}
                   </p>
@@ -223,11 +286,6 @@ export default function SyncPage() {
                       {result.total !== undefined
                         ? `${result.total}件同期完了`
                         : `${result.synced ?? 0}件同期完了`}
-                      {result.by_project && (
-                        <span className="text-gray-500 ml-1">
-                          ({Object.entries(result.by_project).map(([p, c]) => `${p}: ${c}`).join(", ")})
-                        </span>
-                      )}
                     </div>
                   )}
                 </div>
