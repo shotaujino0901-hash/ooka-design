@@ -210,7 +210,7 @@ async function claudeExtractFromPDFVision(
   const base64 = buffer.toString("base64")
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -247,7 +247,21 @@ async function claudeExtractFromPDFVision(
     ],
   })
   const text = message.content[0].type === "text" ? message.content[0].text : "[]"
-  return JSON.parse(text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, ""))
+  const cleaned = text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "")
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    // 不完全なJSONを末尾から修復して再パース
+    const lastBracket = cleaned.lastIndexOf("},")
+    if (lastBracket > 0) {
+      try {
+        return JSON.parse(cleaned.slice(0, lastBracket + 1) + "]")
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
 }
 
 async function claudeExtract(rawText: string): Promise<Record<string, unknown>[]> {
