@@ -363,7 +363,10 @@ export async function POST(req: Request) {
           source: r.source ?? null,
           notes: r.notes ?? null,
         }))
-      await db.from("market_bids").insert(rows)
+      await db.from("market_bids").upsert(rows, {
+        onConflict: "project_name,bid_date",
+        ignoreDuplicates: true,
+      })
       return Response.json({ saved: rows.length, records: rows })
     }
 

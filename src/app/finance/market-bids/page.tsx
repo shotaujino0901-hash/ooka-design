@@ -8,6 +8,8 @@ const PROPERTY_TYPES = [
   "官公庁", "太陽光", "アパート賃貸", "駐車場",
 ]
 
+type Bidder = { no: number; name: string; amount: number | null; result: string }
+
 type MarketBid = {
   id: number
   bid_date: string
@@ -18,6 +20,8 @@ type MarketBid = {
   winning_bidder: string | null
   winning_amount: number
   estimated_price: number | null
+  minimum_price: number | null
+  all_bidders: Bidder[] | null
   source: string | null
   notes: string | null
 }
@@ -33,6 +37,8 @@ const EMPTY_FORM: FormData = {
   winning_bidder: null,
   winning_amount: 0,
   estimated_price: null,
+  minimum_price: null,
+  all_bidders: null,
   source: null,
   notes: null,
 }
@@ -104,6 +110,7 @@ export default function MarketBidsPage() {
       ...form,
       winning_amount: Number(form.winning_amount),
       estimated_price: form.estimated_price ? Number(form.estimated_price) : null,
+      minimum_price: form.minimum_price ? Number(form.minimum_price) : null,
     }
     if (modal.mode === "add") {
       await fetch("/api/market-bids", {
@@ -295,7 +302,7 @@ export default function MarketBidsPage() {
                 <input type="text" value={modal.form.winning_bidder ?? ""}
                   onChange={(e) => setField("winning_bidder", e.target.value || null)} className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={labelCls}>落札金額（万円）</label>
                   <input type="number"
@@ -310,7 +317,47 @@ export default function MarketBidsPage() {
                     onChange={(e) => setField("estimated_price", e.target.value ? Number(e.target.value) * 10000 : null)}
                     placeholder="わかれば" className={inputCls} />
                 </div>
+                <div>
+                  <label className={labelCls}>最低制限価格（万円）</label>
+                  <input type="number"
+                    value={modal.form.minimum_price ? Math.round(modal.form.minimum_price / 10000) : ""}
+                    onChange={(e) => setField("minimum_price", e.target.value ? Number(e.target.value) * 10000 : null)}
+                    placeholder="わかれば" className={inputCls} />
+                </div>
               </div>
+
+              {/* 業者一覧 */}
+              {modal.form.all_bidders && modal.form.all_bidders.length > 0 && (
+                <div>
+                  <label className={labelCls}>業者一覧（入札参加者）</label>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-medium w-8">No</th>
+                          <th className="text-left px-3 py-1.5 text-gray-500 font-medium">社名</th>
+                          <th className="text-right px-3 py-1.5 text-gray-500 font-medium">入札金額</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-medium">結果</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modal.form.all_bidders.map((b, i) => (
+                          <tr key={i} className={`${i < modal.form.all_bidders!.length - 1 ? "border-b border-gray-50" : ""} ${b.result === "落札" ? "bg-green-50" : b.result === "失格" ? "bg-red-50" : ""}`}>
+                            <td className="px-2 py-1.5 text-center text-gray-400">{b.no}</td>
+                            <td className="px-3 py-1.5 text-gray-800">{b.name}</td>
+                            <td className="px-3 py-1.5 text-right text-gray-700">{b.amount ? fmt(b.amount) : "—"}</td>
+                            <td className="px-2 py-1.5 text-center">
+                              <span className={`font-medium ${b.result === "落札" ? "text-green-700" : b.result === "失格" ? "text-red-600" : b.result === "辞退" ? "text-gray-400" : "text-gray-600"}`}>
+                                {b.result}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className={labelCls}>データソース</label>
                 <input type="text" value={modal.form.source ?? ""}
