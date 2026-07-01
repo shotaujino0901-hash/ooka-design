@@ -256,8 +256,11 @@ export async function POST(req: Request) {
     if (name.endsWith(".pdf")) {
       const rawText = await extractTextFromPDF(buffer)
       if (isHamamatsuBidPDF(rawText)) {
-        // 浜松市指名競争入札結果フォーマット → 専用パーサー
+        // 浜松市入札結果フォーマット → 専用パーサー、失敗時はClaudeにフォールバック
         extracted = parseHamamatsuBidPDF(rawText, file.name)
+        if (extracted.length === 0) {
+          extracted = await claudeExtract(rawText)
+        }
       } else {
         extracted = await claudeExtract(rawText)
       }
@@ -291,7 +294,7 @@ export async function POST(req: Request) {
       return Response.json({ saved: rows.length, records: rows })
     }
 
-    return Response.json({ saved: 0, records: extracted })
+    return Response.json({ saved: 0, records: extracted, _debug: extracted.length === 0 ? "0件: PDFテキスト抽出またはパースに失敗している可能性があります" : undefined })
   } catch (e: unknown) {
     return Response.json(
       { error: e instanceof Error ? e.message : "インポートに失敗しました" },
