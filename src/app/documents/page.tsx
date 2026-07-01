@@ -210,6 +210,7 @@ export default function DocumentsPage() {
       ) : docs.length === 0 ? (
         <p className="text-sm text-gray-400">ドキュメントがありません。まず「データ同期」でデータを取り込んでください。</p>
       ) : (
+        <>
         <div className="flex items-center justify-between mb-3 text-sm text-gray-500">
           <span>全 {total.toLocaleString()} 件 / {page * PAGE_SIZE + 1}〜{Math.min((page + 1) * PAGE_SIZE, total)} 件表示</span>
           <div className="flex items-center gap-1">
@@ -295,6 +296,7 @@ export default function DocumentsPage() {
             </button>
           </div>
         )}
+        </>
       )}
     </div>
   )
